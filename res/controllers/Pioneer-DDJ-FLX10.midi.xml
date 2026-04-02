@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<MixxxControllerPreset schemaVersion="1" mixxxVersion="">
+<MixxxControllerPreset schemaVersion="1" mixxxVersion="2.3.6">
     <info>
-        <name>DDJ-FLX10 mapping</name>
+        <name>Pioneer DDJ-FLX10 Beta v0.6</name>
         <author>Marc Zischka</author>
-        <description>DDJ-FLX10 mapping v1.0.4 - Compatible Mixxx 2.3.6+</description>
+        <description>Pioneer DDJ-FLX10 mapping beta v0.6 - Compatible Mixxx 2.3.6+</description>
     </info>
-    <controller id="DDJ-FLX10">
+    <controller id="Pioneer DDJ-FLX10">
         <scriptfiles>
             <file filename="Pioneer-DDJ-FLX10-scripts.js" functionprefix="PioneerDDJFLX10"/>
         </scriptfiles>
@@ -13,14 +13,46 @@
             <control>
                 <group>[Master]</group>
                 <key>gain</key>
-                <description>GAIN MAster</description>
+                <description>Master level (14-bit MSB; pair with 0x28 LSB)</description>
                 <status>0xB6</status>
                 <midino>0x08</midino>
                 <options>
-                    <normal/>
+                    <fourteen-bit-msb/>
                 </options>
             </control>
-    		<control>
+            <control>
+                <group>[Master]</group>
+                <key>gain</key>
+                <description>Master level LSB (14-bit)</description>
+                <status>0xB6</status>
+                <midino>0x28</midino>
+                <options>
+                    <fourteen-bit-lsb/>
+                </options>
+            </control>
+            <!-- Booth monitor: typical Pioneer 14-bit pair on ch.7 = 0x09 (MSB) + 0x29 (LSB).
+                 If your MIDI monitor shows other CCs when turning BOOTH only, adjust midino here. -->
+            <control>
+                <group>[Master]</group>
+                <key>booth_gain</key>
+                <description>Booth monitor level (14-bit MSB)</description>
+                <status>0xB6</status>
+                <midino>0x09</midino>
+                <options>
+                    <fourteen-bit-msb/>
+                </options>
+            </control>
+            <control>
+                <group>[Master]</group>
+                <key>booth_gain</key>
+                <description>Booth monitor level (14-bit LSB)</description>
+                <status>0xB6</status>
+                <midino>0x29</midino>
+                <options>
+                    <fourteen-bit-lsb/>
+                </options>
+            </control>
+            <control>
                 <group>[Master]</group>
                 <key>crossfader</key>
                 <description>Crossfader</description>
@@ -982,26 +1014,8 @@
                     <fourteen-bit-msb/>
                 </options>
             </control>
-            <control>
-                <group>[Channel1]</group>
-                <key>reverseroll</key>
-                <description>PLAY/PAUSE +SHIFT (DECK1) - press - Reverse playback in Slip Mode while held (Censor)</description>
-                <status>0x90</status>
-                <midino>0x0E</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
-            <control>
-                <group>[Channel2]</group>
-                <key>reverseroll</key>
-                <description>PLAY/PAUSE +SHIFT (DECK2) - press - Reverse playback in Slip Mode while held (Censor)</description>
-                <status>0x91</status>
-                <midino>0x0E</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
+            <!-- Unbound: midino 0x0E was mapped to `reverseroll` and triggered reverse playback
+                 unintentionally when pressing the "Stem Vocal" button. -->
             <control>
                 <group>[EqualizerRack1_[Channel1]_Effect1]</group>
                 <key>parameter1</key>
@@ -1166,86 +1180,86 @@
                     <normal/>
                 </options>
             </control>
-            <!-- Loop Halve (Shift + Loop In) - uses separate MIDI code 0x4C -->
+            <!-- Loop Halve (dedicated MIDI 0x4C) -->
             <control>
                 <group>[Channel1]</group>
-                <key>PioneerDDJFLX10.LoopHalveShift</key>
-                <description>Loop Halve CH1 (Shift+LoopIn)</description>
+                <key>loop_halve</key>
+                <description>Loop Halve CH1</description>
                 <status>0x90</status>
                 <midino>0x4C</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel2]</group>
-                <key>PioneerDDJFLX10.LoopHalveShift</key>
-                <description>Loop Halve CH2 (Shift+LoopIn)</description>
+                <key>loop_halve</key>
+                <description>Loop Halve CH2</description>
                 <status>0x91</status>
                 <midino>0x4C</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.LoopHalveShift</key>
-                <description>Loop Halve CH3 (Shift+LoopIn)</description>
+                <key>loop_halve</key>
+                <description>Loop Halve CH3</description>
                 <status>0x92</status>
                 <midino>0x4C</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.LoopHalveShift</key>
-                <description>Loop Halve CH4 (Shift+LoopIn)</description>
+                <key>loop_halve</key>
+                <description>Loop Halve CH4</description>
                 <status>0x93</status>
                 <midino>0x4C</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
-            <!-- Loop Double (Shift + Loop Out) - uses separate MIDI code 0x4D -->
+            <!-- Loop Double (dedicated MIDI 0x4D) -->
             <control>
                 <group>[Channel1]</group>
-                <key>PioneerDDJFLX10.LoopDoubleShift</key>
-                <description>Loop Double CH1 (Shift+LoopOut)</description>
+                <key>loop_double</key>
+                <description>Loop Double CH1</description>
                 <status>0x90</status>
                 <midino>0x4D</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel2]</group>
-                <key>PioneerDDJFLX10.LoopDoubleShift</key>
-                <description>Loop Double CH2 (Shift+LoopOut)</description>
+                <key>loop_double</key>
+                <description>Loop Double CH2</description>
                 <status>0x91</status>
                 <midino>0x4D</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.LoopDoubleShift</key>
-                <description>Loop Double CH3 (Shift+LoopOut)</description>
+                <key>loop_double</key>
+                <description>Loop Double CH3</description>
                 <status>0x92</status>
                 <midino>0x4D</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.LoopDoubleShift</key>
-                <description>Loop Double CH4 (Shift+LoopOut)</description>
+                <key>loop_double</key>
+                <description>Loop Double CH4</description>
                 <status>0x93</status>
                 <midino>0x4D</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
@@ -1719,26 +1733,7 @@
                     <fourteen-bit-msb/>
                 </options>
             </control>
-            <control>
-                <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.syncKeyHandler</key>
-                <description>Syncs tempo with other decks (Ch3) - with shift check</description>
-                <status>0x92</status>
-                <midino>0x1A</midino>
-                <options>
-                    <script-binding/>
-                </options>
-            </control>
-            <control>
-                <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.syncKeyHandler</key>
-                <description>Syncs tempo with other decks (Ch4) - with shift check</description>
-                <status>0x93</status>
-                <midino>0x1A</midino>
-                <options>
-                    <script-binding/>
-                </options>
-            </control>
+            <!-- removed redundant syncKeyHandler bindings on 0x1A (CH3/CH4): 0x65 is authoritative -->
             <control>
                 <group>[QuickEffectRack1_[Channel4]]</group>
                 <key>super1</key>
@@ -1799,6 +1794,7 @@
                     <normal/>
                 </options>
             </control>
+            <!-- intentional duplicate with [Skin] show_effectrack for shared UI toggle -->
             <control>
                 <group>[EffectRack1]</group>
                 <key>show</key>
@@ -1959,6 +1955,7 @@
                     <script-binding/>
                 </options>
             </control>
+            <!-- intentional duplicate with [Skin] show_samplers for shared UI toggle -->
             <control>
                 <group>[Samplers]</group>
                 <key>show_samplers</key>
@@ -2864,46 +2861,7 @@
                     <normal/>
                 </options>
             </control>
-            <control>
-                <group>[Channel1]</group>
-                <key>beats_translate_curpos</key>
-                <description>Controls beat or quantization functions Ch1</description>
-                <status>0x90</status>
-                <midino>0x40</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
-            <control>
-                <group>[Channel2]</group>
-                <key>beats_translate_curpos</key>
-                <description>Controls beat or quantization functions Ch2</description>
-                <status>0x91</status>
-                <midino>0x40</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
-            <control>
-                <group>[Channel3]</group>
-                <key>beats_translate_curpos</key>
-                <description>Controls beat or quantization functions Ch3</description>
-                <status>0x92</status>
-                <midino>0x40</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
-            <control>
-                <group>[Channel4]</group>
-                <key>beats_translate_curpos</key>
-                <description>Controls beat or quantization functions Ch4</description>
-                <status>0x93</status>
-                <midino>0x40</midino>
-                <options>
-                    <normal/>
-                </options>
-            </control>
+            <!-- removed conflicting mapping: beats_translate_curpos shared MIDI w/ slip_enabled -->
             <control>
                 <group>[Master]</group>
                 <key>maximize_library</key>
@@ -3647,162 +3605,162 @@
             </control>
             <control>
                 <group>[Channel1]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_4_backward</key>
                 <description>Beatjump Backward CH1</description>
                 <status>0x90</status>
                 <midino>0x5E</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel2]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_4_backward</key>
                 <description>Beatjump Backward CH2</description>
                 <status>0x91</status>
                 <midino>0x5E</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_4_backward</key>
                 <description>Beatjump Backward CH3</description>
                 <status>0x92</status>
                 <midino>0x5E</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_4_backward</key>
                 <description>Beatjump Backward CH4</description>
                 <status>0x93</status>
                 <midino>0x5E</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel1]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_4_forward</key>
                 <description>Beatjump Forward CH1</description>
                 <status>0x90</status>
                 <midino>0x5F</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel2]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_4_forward</key>
                 <description>Beatjump Forward CH2</description>
                 <status>0x91</status>
                 <midino>0x5F</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_4_forward</key>
                 <description>Beatjump Forward CH3</description>
                 <status>0x92</status>
                 <midino>0x5F</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_4_forward</key>
                 <description>Beatjump Forward CH4</description>
                 <status>0x93</status>
                 <midino>0x5F</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel1]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_16_backward</key>
                 <description>Beatjump Backward CH1 (Shift=16 beats)</description>
                 <status>0x90</status>
                 <midino>0x61</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel2]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_16_backward</key>
                 <description>Beatjump Backward CH2 (Shift=16 beats)</description>
                 <status>0x91</status>
                 <midino>0x61</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_16_backward</key>
                 <description>Beatjump Backward CH3 (Shift=16 beats)</description>
                 <status>0x92</status>
                 <midino>0x61</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.beatjumpBackward</key>
+                <key>beatjump_16_backward</key>
                 <description>Beatjump Backward CH4 (Shift=16 beats)</description>
                 <status>0x93</status>
                 <midino>0x61</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel1]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_16_forward</key>
                 <description>Beatjump Forward CH1 (Shift=16 beats)</description>
                 <status>0x90</status>
                 <midino>0x62</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel2]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_16_forward</key>
                 <description>Beatjump Forward CH2 (Shift=16 beats)</description>
                 <status>0x91</status>
                 <midino>0x62</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel3]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_16_forward</key>
                 <description>Beatjump Forward CH3 (Shift=16 beats)</description>
                 <status>0x92</status>
                 <midino>0x62</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
                 <group>[Channel4]</group>
-                <key>PioneerDDJFLX10.beatjumpForward</key>
+                <key>beatjump_16_forward</key>
                 <description>Beatjump Forward CH4 (Shift=16 beats)</description>
                 <status>0x93</status>
                 <midino>0x62</midino>
                 <options>
-                    <script-binding/>
+                    <normal/>
                 </options>
             </control>
             <control>
@@ -3999,14 +3957,6 @@
             </output>
             <output>
                 <group>[Channel1]</group>
-                <key>reverse</key>
-                <description>Reverse CH1</description>
-                <status>0x90</status>
-                <midino>0x15</midino>
-                <minimum>0.5</minimum>
-            </output>
-            <output>
-                <group>[Channel1]</group>
                 <key>sync_key</key>
                 <description>Key sync Feedback CH1</description>
                 <status>0x90</status>
@@ -4051,14 +4001,6 @@
                 <description>Quantize LED CH2</description>
                 <status>0x91</status>
                 <midino>0x35</midino>
-                <minimum>0.5</minimum>
-            </output>
-            <output>
-                <group>[Channel2]</group>
-                <key>reverse</key>
-                <description>Reverse CH2</description>
-                <status>0x91</status>
-                <midino>0x15</midino>
                 <minimum>0.5</minimum>
             </output>
             <output>
@@ -4111,14 +4053,6 @@
             </output>
             <output>
                 <group>[Channel3]</group>
-                <key>reverse</key>
-                <description>Reverse CH3</description>
-                <status>0x92</status>
-                <midino>0x15</midino>
-                <minimum>0.5</minimum>
-            </output>
-            <output>
-                <group>[Channel3]</group>
                 <key>sync_key</key>
                 <description>Key sync Feedback CH3</description>
                 <status>0x92</status>
@@ -4163,14 +4097,6 @@
                 <description>Quantize LED CH4</description>
                 <status>0x93</status>
                 <midino>0x35</midino>
-                <minimum>0.5</minimum>
-            </output>
-            <output>
-                <group>[Channel4]</group>
-                <key>reverse</key>
-                <description>Reverse CH4</description>
-                <status>0x93</status>
-                <midino>0x15</midino>
                 <minimum>0.5</minimum>
             </output>
             <output>

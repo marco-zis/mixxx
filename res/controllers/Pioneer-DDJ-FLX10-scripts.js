@@ -1,16 +1,16 @@
 // -------------------------------------------------------------------
-// ------------------- DDJ-FLX10 script file v.1.0.4 -------------------
+// ------------------- DDJ-FLX10 script file v.0.6 -------------------
 // -------------------------------------------------------------------
 
 // *************************************************************************
 // * Mixxx mapping script file for the Pioneer DDJ-FLX10.
-// * Mostly adapted from the DDJ-1000 mapping script from Arnold Kalambani
-// * Author: Marc Zischka (Zim)
+// * Adapted from the DDJ-1000 mapping script from Arnold Kalambani
+// * Author: Marc Zischka (ZiM) BETA Version
 // ****************************************************************************
 //
 //  Implemented (as per manufacturer's manual):
 //      * Mixer Section (Faders, EQ, Filter, Gain, Cue)
-//      * Browsing and loading 
+//      * Browsing and loading
 //      * Jogwheels, Scratching, Bending, Loop adjust ?
 //      * Cycle Temporange
 //      * Beat Sync
@@ -20,7 +20,8 @@
 //      * Sampler Mode
 //      * Toggle quantize
 //      * Toggle slip
-//		* Reverse play  /// also with syem vocal button > to fix
+//      * Slip Reverse and Reverse play
+//      * Quick navigation with shift + jog
 //++++++++++++++++++++++++++++++++++++++++++++++++++++
 //Check :
 //  Custom (Mixxx specific mappings):
@@ -38,31 +39,32 @@
 //      * Pad FX1 (see mapping infos)
 //      * Pad FX2
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// Fixed from previous version :
-// - Sampler 3 and 7: stop and cue didn't work properly
-// - 4 and 16 beatjump fixed
-// - Added quick navigation with shift + jog
 
 // Global variables
 var PioneerDDJFLX10 = {};
 
 // Global state
-PioneerDDJFLX10.shiftActive = false;
-PioneerDDJFLX10._beatjumpShiftSize = 16;
+PioneerDDJFLX10._shiftByDeck = {1: false, 2: false, 3: false, 4: false};
 PioneerDDJFLX10._rateMSB = {1: 0, 2: 0, 3: 0, 4: 0};
 PioneerDDJFLX10._rateLSB = {1: 0, 2: 0, 3: 0, 4: 0};
 PioneerDDJFLX10._jogTouches = {1: false, 2: false, 3: false, 4: false};
 PioneerDDJFLX10._jogLastValue = {1: 0, 2: 0, 3: 0, 4: 0};
 PioneerDDJFLX10._reverseSlipActive = {1: false, 2: false, 3: false, 4: false};
-PioneerDDJFLX10._currentTimeMode = {1: 0, 2: 0, 3: 0, 4: 0}; // 0=Remaining, 1=Elapsed
+// Toggle mode active for SHIFT + reverse slip.
+// When true: releasing the reverse button must NOT cancel reverse playback.
+PioneerDDJFLX10._reverseShiftToggleActive = {1: false, 2: false, 3: false, 4: false};
+// Used to restore Slip state when pressing/releasing Slip Reverse (non-shift).
+PioneerDDJFLX10._reverseSlipPrevSlipEnabled = {1: false, 2: false, 3: false, 4: false};
 PioneerDDJFLX10._lastShiftPress = 0;
-PioneerDDJFLX10._playCueBlinkTimer = {};
-PioneerDDJFLX10._playCueBlinkState = {1: false, 2: false, 3: false, 4: false};
-PioneerDDJFLX10._playCueShouldBlink = {1: false, 2: false, 3: false, 4: false};
 PioneerDDJFLX10._cuePressed = {1: false, 2: false, 3: false, 4: false};
-PioneerDDJFLX10._playShouldBlink = {1: false, 2: false, 3: false, 4: false};
 // Shift+Jog = fast seek. Scale réduit x4 pour ~1 tour = tout le morceau (était 1/4 tour).
 PioneerDDJFLX10._fastSeekScale = 15;
+
+// Set to true only for local debugging; controller scripts are noisy otherwise.
+PioneerDDJFLX10.DEBUG = false;
+PioneerDDJFLX10._debug = function (msg) {
+    if (PioneerDDJFLX10.DEBUG) print(msg);
+};
 
 // Utility function to extract deck number from group
 PioneerDDJFLX10._getDeckFromGroup = function(group) {
@@ -70,12 +72,25 @@ PioneerDDJFLX10._getDeckFromGroup = function(group) {
     return match ? parseInt(match[0], 10) : 1;
 };
 
+PioneerDDJFLX10._isShiftActive = function(group) {
+    var deck = PioneerDDJFLX10._getDeckFromGroup(group || "");
+    // SHIFT est global sur la machine : même si le contrôleur envoie le MIDI
+    // avec un status "deck" différent, on considère SHIFT actif si n'importe
+    // quel deck a SHIFT pressé.
+    if (PioneerDDJFLX10._shiftByDeck[deck]) return true;
+    for (var d = 1; d <= 4; d++) {
+        if (PioneerDDJFLX10._shiftByDeck[d]) return true;
+    }
+    return false;
+};
+
 // Initialization
-PioneerDDJFLX10.init = function(id) {
-    print("Pioneer DDJ-FLX10 PROD - Initialisation");
+PioneerDDJFLX10.init = function(_id) {
+    PioneerDDJFLX10._debug("Pioneer DDJ-FLX10 PROD - Initialisation");
     // Plage de pitch par défaut (±16%)
     for (var i = 1; i <= 4; i++) {
         engine.setValue("[Channel" + i + "]", "rateRange", 0.16);
+        engine.setValue("[Channel" + i + "]", "cue_mode", 1);
         // Connect VU meters
         engine.connectControl("[Channel" + i + "]", "VuMeter", "PioneerDDJFLX10.LedVuMeterCH" + i);
         // Force off au démarrage pour éviter LEDs fantômes
@@ -90,17 +105,69 @@ PioneerDDJFLX10.init = function(id) {
     if (typeof PioneerDDJFLX10._wireHotcueLeds === "function") {
         PioneerDDJFLX10._wireHotcueLeds();
     }
+    PioneerDDJFLX10._wireReverseLed();
+    PioneerDDJFLX10._wireSlipLed();
     return true;
 };
 
+// Reverse/SlipReverse button LED:
+// Pioneer uses a single LED, but Mixxx logic for slip reverse may not always reflect [ChannelX],reverse.
+// We therefore turn the LED ON when either [ChannelX],reverse OR [ChannelX],slip_enabled is active.
+PioneerDDJFLX10._sendReverseLed = function(deck, on) {
+    var status = 0x90 + (deck - 1);
+    midi.sendShortMsg(status, 0x15, on ? 0x7F : 0x00);
+};
+
+PioneerDDJFLX10._wireReverseLed = function() {
+    if (PioneerDDJFLX10._reverseLedWired) return;
+    PioneerDDJFLX10._reverseLedWired = true;
+
+    for (var d = 1; d <= 4; d++) {
+        (function(deck) {
+            var g = "[Channel" + deck + "]";
+            var render = function() {
+                var rev = engine.getValue(g, "reverse") > 0.5;
+                var slip = engine.getValue(g, "slip_enabled") > 0.5;
+                PioneerDDJFLX10._sendReverseLed(deck, (rev || slip));
+            };
+            engine.connectControl(g, "reverse", render);
+            engine.connectControl(g, "slip_enabled", render);
+            render();
+        })(d);
+    }
+};
+
+// Slip button LED (next to Quantize): should reflect [ChannelX],slip_enabled.
+PioneerDDJFLX10._sendSlipLed = function(deck, on) {
+    var status = 0x90 + (deck - 1);
+    midi.sendShortMsg(status, 0x40, on ? 0x7F : 0x00);
+};
+
+PioneerDDJFLX10._wireSlipLed = function() {
+    if (PioneerDDJFLX10._slipLedWired) return;
+    PioneerDDJFLX10._slipLedWired = true;
+
+    for (var d = 1; d <= 4; d++) {
+        (function(deck) {
+            var g = "[Channel" + deck + "]";
+            var render = function() {
+                var slip = engine.getValue(g, "slip_enabled") > 0.5;
+                PioneerDDJFLX10._sendSlipLed(deck, slip);
+            };
+            engine.connectControl(g, "slip_enabled", render);
+            render();
+        })(d);
+    }
+};
+
 // Tempo management (14-bit) — inversion Pioneer
-PioneerDDJFLX10.rate_msb = function(channel, control, value, status, group) {
+PioneerDDJFLX10.rate_msb = function(_channel, _control, value, _status, group) {
     var deck = PioneerDDJFLX10._getDeckFromGroup(group);
     PioneerDDJFLX10._rateMSB[deck] = value;
     PioneerDDJFLX10._updateRate(deck);
 };
 
-PioneerDDJFLX10.rate_lsb = function(channel, control, value, status, group) {
+PioneerDDJFLX10.rate_lsb = function(_channel, _control, value, _status, group) {
     var deck = PioneerDDJFLX10._getDeckFromGroup(group);
     PioneerDDJFLX10._rateLSB[deck] = value;
     PioneerDDJFLX10._updateRate(deck);
@@ -120,25 +187,27 @@ PioneerDDJFLX10._updateRate = function(deck) {
 
 // Shutdown
 PioneerDDJFLX10.shutdown = function() {
-    print("Pioneer DDJ-FLX10 PROD - Arrêt");
-    
+    PioneerDDJFLX10._debug("Pioneer DDJ-FLX10 PROD - Arrêt");
+
     // Turn off all LEDs
     for (var i = 1; i <= 4; i++) {
         var group = "[Channel" + i + "]";
-        midi.sendShortMsg(0x90 + (i-1), 0x00, 0x00); // Cue LED off
+        midi.sendShortMsg(0x90 + (i-1), 0x0C, 0x00); // Cue LED off
         midi.sendShortMsg(0x90 + (i-1), 0x0B, 0x00); // Play LED off
+        midi.sendShortMsg(0x90 + (i-1), 0x15, 0x00); // Reverse/SlipReverse LED off
+        midi.sendShortMsg(0x90 + (i-1), 0x40, 0x00); // Slip LED off
         // Add other LEDs to turn off if needed
     }
 };
 
 // Jog Wheel Management
 // control = MIDI CC: 0x1F = avance rapide (hardware), 0x21 = pitch bend, 0x22 = scratch
-PioneerDDJFLX10.wheelTurn = function(channel, control, value, status, group) {
+PioneerDDJFLX10.wheelTurn = function(_channel, control, value, _status, group) {
     var newValue = value - 64;
     var deckNumber = PioneerDDJFLX10._getDeckFromGroup(group);
     var isFastSeekCC = (control === 0x1F);
 
-    if (isFastSeekCC || PioneerDDJFLX10.shiftActive) {
+    if (isFastSeekCC || PioneerDDJFLX10._isShiftActive(group)) {
         engine.setValue(group, "jog", newValue * PioneerDDJFLX10._fastSeekScale);
         return;
     }
@@ -162,18 +231,18 @@ PioneerDDJFLX10.LedVuMeterCH2 = function (value) { PioneerDDJFLX10._sendVu(0xB1,
 PioneerDDJFLX10.LedVuMeterCH3 = function (value) { PioneerDDJFLX10._sendVu(0xB2, 0x02, value); };
 PioneerDDJFLX10.LedVuMeterCH4 = function (value) { PioneerDDJFLX10._sendVu(0xB3, 0x02, value); };
 
-PioneerDDJFLX10.wheelTouch = function(channel, control, value, status, group) {
+PioneerDDJFLX10.wheelTouch = function(_channel, _control, value, _status, group) {
     var deckNumber = PioneerDDJFLX10._getDeckFromGroup(group);
-    
-    if (value == 0x7F) {
+
+    if (value === 0x7F) {
         // Enable scratch mode
         var alpha = 1.0/8;
         var beta = alpha/32;
-        print("Enabling scratch for deck " + deckNumber + " group " + group); // Debug
+        PioneerDDJFLX10._debug("Enabling scratch for deck " + deckNumber + " group " + group);
         engine.scratchEnable(deckNumber, 32767, 33+1/3, alpha, beta);
     } else {
         // Disable scratch mode
-        print("Disabling scratch for deck " + deckNumber + " group " + group); // Debug
+        PioneerDDJFLX10._debug("Disabling scratch for deck " + deckNumber + " group " + group);
         engine.scratchDisable(deckNumber);
     }
 };
@@ -188,88 +257,138 @@ PioneerDDJFLX10.sensitivityMaximizer = function (value, factor) {
 };
 
 // Shift buttons management
-PioneerDDJFLX10.shiftHandler = function(channel, control, value, status, group) {
-    PioneerDDJFLX10.shiftActive = (value > 0);
-    var now = new Date().getTime();
-    
-    // Detect double-click (within 300ms)
-    PioneerDDJFLX10._lastShiftPress = now;
-};
+PioneerDDJFLX10.shiftHandler = function(_channel, _control, value, _status, group) {
+    var pressed = (value > 0);
+    var deck = PioneerDDJFLX10._getDeckFromGroup(group || "");
+    PioneerDDJFLX10._shiftByDeck[deck] = pressed;
 
-// Beatjump with SHIFT support
-PioneerDDJFLX10._triggerBeatjump = function(group, direction) {
-    if (!group) return;
-    if (PioneerDDJFLX10.shiftActive) {
-        var prevSize = engine.getValue(group, "beatjump_size");
-        engine.setValue(group, "beatjump_size", PioneerDDJFLX10._beatjumpShiftSize);
-        engine.setValue(group, direction > 0 ? "beatjump_forward" : "beatjump_backward", 1);
-        engine.beginTimer(1, function() {
-            engine.setValue(group, "beatjump_size", (prevSize > 0 ? prevSize : 4));
-        }, true);
-        return;
+    // If the user presses SHIFT while the reverse-slip button is being held
+    // (non-shift behavior), convert it to the SHIFT toggle behavior.
+    if (pressed) {
+        // Convertir tous les decks dont le reverse-slip est actuellement maintenu,
+        // indépendamment du deck dont le MIDI SHIFT arrive.
+        for (var d = 1; d <= 4; d++) {
+            if (PioneerDDJFLX10._reverseSlipActive[d]) {
+                PioneerDDJFLX10._reverseShiftToggleActive[d] = true;
+                PioneerDDJFLX10._reverseSlipActive[d] = false;
+                // Prevent slip-mode auto behavior; keep reverse enabled.
+                engine.setValue("[Channel" + d + "]", "slip_enabled", 0);
+                engine.setValue("[Channel" + d + "]", "reverse", 1);
+            }
+        }
     }
-    engine.setValue(group, "beatjump_size", 4);
-    engine.setValue(group, direction > 0 ? "beatjump_forward" : "beatjump_backward", 1);
+
+    if (!pressed) return;
+
+    var now = new Date().getTime();
+    // Detect double-click on SHIFT (within 300ms)
+    if (PioneerDDJFLX10._lastShiftPress && (now - PioneerDDJFLX10._lastShiftPress) < 300) {
+        PioneerDDJFLX10._lastShiftPress = 0; // prevent repeated triggers on triple click
+        if (typeof PioneerDDJFLX10._handleDoubleShift === "function") {
+            PioneerDDJFLX10._handleDoubleShift(group);
+        }
+    } else {
+        PioneerDDJFLX10._lastShiftPress = now;
+    }
 };
 
-PioneerDDJFLX10.beatjumpBackward = function(channel, control, value, status, group) {
-    if (value <= 0) return;
-    PioneerDDJFLX10._triggerBeatjump(group, -1);
-};
+// SHIFT double-press handler:
+// Toggle jog needle (digimarker) visibility: ON/OFF.
+PioneerDDJFLX10._handleDoubleShift = function () {
+    PioneerDDJFLX10._jogDisplayEnabled = (PioneerDDJFLX10._jogDisplayEnabled === undefined)
+        ? true
+        : !PioneerDDJFLX10._jogDisplayEnabled;
 
-PioneerDDJFLX10.beatjumpForward = function(channel, control, value, status, group) {
-    if (value <= 0) return;
-    PioneerDDJFLX10._triggerBeatjump(group, 1);
+    var JOG_DISPLAY_NOTE = 0x9F; // Channel 16 notes
+    for (var deck = 1; deck <= 4; deck++) {
+        // Notes 0x5D..0x62 hide/show the needle.
+        midi.sendShortMsg(JOG_DISPLAY_NOTE, 0x5D + (deck - 1), PioneerDDJFLX10._jogDisplayEnabled ? 0x00 : 0x7F);
+    }
+
+    // If Mapping 1.1 A jog helper functions exist, refresh immediately when enabling.
+    if (PioneerDDJFLX10._jogDisplayEnabled
+        && typeof PioneerDDJFLX10._jogMarker === "function"
+        && typeof engine !== "undefined") {
+        for (var d = 1; d <= 4; d++) {
+            var g = "[Channel" + d + "]";
+            if (typeof PioneerDDJFLX10._jogMarker === "function") {
+                PioneerDDJFLX10._jogMarker(engine.getValue(g, "playposition"), g, "playposition");
+            }
+            if (typeof PioneerDDJFLX10._jogBpm === "function") {
+                PioneerDDJFLX10._jogBpm(engine.getValue(g, "bpm"), g, "bpm");
+            }
+            if (typeof PioneerDDJFLX10._jogSpeed === "function") {
+                PioneerDDJFLX10._jogSpeed(engine.getValue(g, "rate"), g, "rate");
+            }
+            if (typeof PioneerDDJFLX10._jogTime === "function") {
+                PioneerDDJFLX10._jogTime(engine.getValue(g, "playposition"), g, "playposition");
+            }
+            if (typeof PioneerDDJFLX10._jogKey === "function") {
+                PioneerDDJFLX10._jogKey(engine.getValue(g, "key"), g, "key");
+            }
+        }
+    }
 };
 
 // Reverse with slip mode management
-PioneerDDJFLX10.reverse = function(channel, control, value, status, group) {
+PioneerDDJFLX10.reverse = function(_channel, _control, value, _status, group) {
     var deck = PioneerDDJFLX10._getDeckFromGroup(group);
-    
+
     if (value === 0x7F) { // Button pressed
-        if (PioneerDDJFLX10.shiftActive) {
-            // Toggle current state
-            var currentReverse = engine.getValue(group, "reverse") || 0;
-            engine.setValue(group, "reverse", currentReverse ? 0 : 1);
-            engine.setValue(group, "slip_enabled", 0); // Disable slip mode
+        if (PioneerDDJFLX10._isShiftActive(group)) {
+            // SHIFT + press: toggle reverse (cancel only on next SHIFT+press)
+            var currentReverse = engine.getValue(group, "reverse") > 0.5;
+
+            if (!currentReverse) {
+                // Enable toggle reverse without slip-mode.
+                PioneerDDJFLX10._reverseSlipPrevSlipEnabled[deck] =
+                    engine.getValue(group, "slip_enabled") > 0.5;
+                PioneerDDJFLX10._reverseShiftToggleActive[deck] = true;
+                PioneerDDJFLX10._reverseSlipActive[deck] = false; // prevent release-cancel
+                engine.setValue(group, "slip_enabled", 0);
+                engine.setValue(group, "reverse", 1);
+            } else {
+                // Disable toggle reverse and restore previous slip state.
+                PioneerDDJFLX10._reverseShiftToggleActive[deck] = false;
+                engine.setValue(group, "reverse", 0);
+                engine.setValue(group, "slip_enabled",
+                    PioneerDDJFLX10._reverseSlipPrevSlipEnabled[deck] ? 1 : 0);
+                PioneerDDJFLX10._reverseSlipActive[deck] = false;
+            }
         } else {
-            // Enable slip mode and reverse
-            engine.setValue(group, "slip_enabled", 1);
-            engine.setValue(group, "reverse", 1);
-            PioneerDDJFLX10._reverseSlipActive[deck] = true;
+            // Slip Reverse (non-shift):
+            // - enable slip mode while holding
+            // - play in reverse while held
+            // - restore previous slip_enabled state when released
+            if (PioneerDDJFLX10._reverseShiftToggleActive[deck]) {
+                // If reverse is already toggled via SHIFT, don't re-enable slip mode.
+                engine.setValue(group, "reverse", 1);
+                PioneerDDJFLX10._reverseSlipActive[deck] = false;
+            } else {
+                PioneerDDJFLX10._reverseSlipPrevSlipEnabled[deck] =
+                    engine.getValue(group, "slip_enabled") > 0.5;
+                engine.setValue(group, "slip_enabled", 1);
+                engine.setValue(group, "reverse", 1);
+                PioneerDDJFLX10._reverseSlipActive[deck] = true;
+            }
         }
     } else if (value === 0x00 && PioneerDDJFLX10._reverseSlipActive[deck]) {
-        // Button release with slip mode active
+        // Button release (non-shift): stop reverse and restore slip state.
         engine.setValue(group, "reverse", 0);
-        engine.setValue(group, "slip_enabled", 0);
+        engine.setValue(group, "slip_enabled",
+            PioneerDDJFLX10._reverseSlipPrevSlipEnabled[deck] ? 1 : 0);
         PioneerDDJFLX10._reverseSlipActive[deck] = false;
     }
 };
 
-// Loop functions with shift support - RESTORED for PROD version
-PioneerDDJFLX10.LoopHalveShift = function(channel, control, value, status, group) {
-    if (value === 0x7F) {
-        if (PioneerDDJFLX10.shiftActive) {
-            engine.setValue(group, "loop_halve", 1);
-    } else {
-            engine.setValue(group, "loop_in", 1);
-        }
-    }
-};
-
-PioneerDDJFLX10.LoopDoubleShift = function(channel, control, value, status, group) {
-    if (value === 0x7F) {
-        if (PioneerDDJFLX10.shiftActive) {
-            engine.setValue(group, "loop_double", 1);
-        } else {
-            engine.setValue(group, "loop_out", 1);
-        }
-    }
+// XML compatibility alias (existing XML uses reverseHandler).
+PioneerDDJFLX10.reverseHandler = function(channel, control, value, status, group) {
+    return PioneerDDJFLX10.reverse(channel, control, value, status, group);
 };
 
 // Rate range selector — Pioneer 6/10/16/20 %
 PioneerDDJFLX10._rateRanges = [0.06, 0.10, 0.16, 0.20];
-PioneerDDJFLX10.RangeSelector = function(channel, control, value, status, group) {
+PioneerDDJFLX10.RangeSelector = function(_channel, _control, value, _status, group) {
     if (value !== 0x7F) return;
     var current = engine.getValue(group, "rateRange");
     var idx = 0, best = 1e9;
@@ -282,24 +401,38 @@ PioneerDDJFLX10.RangeSelector = function(channel, control, value, status, group)
 };
 
 // Time display mode management
-PioneerDDJFLX10.TimeTypeChange = function(channel, control, value, status, group) {
-    if (value === 0x7F) {
-        var deck = PioneerDDJFLX10._getDeckFromGroup(group);
-        PioneerDDJFLX10._currentTimeMode[deck] = (PioneerDDJFLX10._currentTimeMode[deck] + 1) % 2;
-        PioneerDDJFLX10._updateTimeMode(group, deck);
+PioneerDDJFLX10.TimeTypeChange = function(_channel, _control, value, _status, group) {
+    if (value !== 0x7F) return;
+    var current = 0;
+    try {
+        current = engine.getValue("[Controls]", "ShowDurationRemaining") > 0 ? 1 : 0;
+    } catch (e) {
+        current = engine.getValue(group, "show_seconds_elapsed") > 0 ? 0 : 1;
+    }
+    PioneerDDJFLX10._updateTimeMode(group, null, current ? 0 : 1);
+};
+
+PioneerDDJFLX10._updateTimeMode = function(group, deck, forcedMode) {
+    var timeMode = (forcedMode !== undefined) ? forcedMode : 0;
+    // Mixxx 2.3+: prefer [Controls],ShowDurationRemaining.
+    // Keep legacy fallback for mappings/environments that still use show_seconds_elapsed.
+    try {
+        engine.setValue("[Controls]", "ShowDurationRemaining", timeMode === 0 ? 1 : 0);
+    } catch (e) {
+        engine.setValue(group, "show_seconds_elapsed", timeMode === 1);
     }
 };
 
-PioneerDDJFLX10._updateTimeMode = function(group, deck) {
-    var timeMode = PioneerDDJFLX10._currentTimeMode[deck];
-    engine.setValue(group, "show_seconds_elapsed", timeMode === 1);
+// XML compatibility alias (existing XML uses TimeTypeChangeGlobal).
+PioneerDDJFLX10.TimeTypeChangeGlobal = function(channel, control, value, status, group) {
+    return PioneerDDJFLX10.TimeTypeChange(channel, control, value, status, group);
 };
 
 // Tempo reset button management
-PioneerDDJFLX10.rate_reset = function(channel, control, value, status, group) {
+PioneerDDJFLX10.rate_reset = function(_channel, _control, value, _status, group) {
     if (value === 0x7F) {
         engine.setValue(group, "rate_set_default", 1);
-        
+
         // Reset internal values
         var deck = PioneerDDJFLX10._getDeckFromGroup(group);
         PioneerDDJFLX10._rateMSB[deck] = 0x40; // Center value (0x40 = 64)
@@ -309,10 +442,10 @@ PioneerDDJFLX10.rate_reset = function(channel, control, value, status, group) {
 
 // Cue button management
 // control 0x0C = CUE normal, 0x48 = bouton reset cue (dédié ou Shift+CUE)
-PioneerDDJFLX10.cueButton = function(channel, control, value, status, group) {
+PioneerDDJFLX10.cueButton = function(_channel, control, value, _status, group) {
     var pressed = value > 0;
     var deck = PioneerDDJFLX10._getDeckFromGroup(group);
-    var doResetCue = (control === 0x48) || PioneerDDJFLX10.shiftActive;
+    var doResetCue = (control === 0x48) || PioneerDDJFLX10._isShiftActive(group);
 
     if (pressed) {
         if (doResetCue) {
@@ -330,88 +463,13 @@ PioneerDDJFLX10.cueButton = function(channel, control, value, status, group) {
         PioneerDDJFLX10._cuePressed[deck] = true;
     } else {
         // Relâchement : stop/retour au point cue seulement pour CUE normal (0x0C)
-        if (control === 0x0C && !PioneerDDJFLX10.shiftActive) {
+        if (control === 0x0C && !PioneerDDJFLX10._isShiftActive(group)) {
             engine.setValue(group, "cue_default", 0);
         }
         PioneerDDJFLX10._cuePressed[deck] = false;
     }
-    PioneerDDJFLX10._updatePlayCueLEDs(group);
-};
-
-// Pilotage Play/Cue LEDs façon Pioneer (blink en pause sur cue)
-PioneerDDJFLX10._sendPlayCue = function(deck, note, on) {
-    var status = 0x90 + (deck - 1);
-    midi.sendShortMsg(status, note, on ? 0x7F : 0x00);
-};
-
-PioneerDDJFLX10._updatePlayCueLEDs = function(group) {
-    var deck = PioneerDDJFLX10._getDeckFromGroup(group);
-    var playing = engine.getValue(group, "play") > 0;
-    var cueLit = engine.getValue(group, "cue_indicator") > 0;
-    var cuePressed = PioneerDDJFLX10._cuePressed[deck];
-    var hasTrack = engine.getValue(group, "track_samples") > 0;
-    var atEnd = engine.getValue(group, "playposition") >= 0.999;
-
-    // Modes :
-    // - playing : Play ON, Cue OFF
-    // - cuePressed : Cue ON fixe, Play OFF
-    // - pause avec piste chargée (standby) : Play blink, Cue OFF
-    // - fin de piste / pas de piste : tout OFF
-    if (playing) {
-        PioneerDDJFLX10._playCueShouldBlink[deck] = false;
-        PioneerDDJFLX10._playShouldBlink[deck] = false;
-        PioneerDDJFLX10._playCueBlinkState[deck] = false;
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0B, true);
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0C, false);
-    } else if (cuePressed) {
-        PioneerDDJFLX10._playCueShouldBlink[deck] = false;
-        PioneerDDJFLX10._playShouldBlink[deck] = false;
-        PioneerDDJFLX10._playCueBlinkState[deck] = false;
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0B, false);
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0C, true);
-    } else if (hasTrack && !atEnd) {
-        // Standby : Play blink, Cue off
-        PioneerDDJFLX10._playCueShouldBlink[deck] = false;
-        PioneerDDJFLX10._playShouldBlink[deck] = true;
-    } else {
-        PioneerDDJFLX10._playCueShouldBlink[deck] = false;
-        PioneerDDJFLX10._playShouldBlink[deck] = false;
-        PioneerDDJFLX10._playCueBlinkState[deck] = false;
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0B, false);
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0C, false);
-    }
-};
-
-PioneerDDJFLX10._startPlayCueBlink = function(deck) {
-    // Blink period ~ 500ms (2 Hz)
-    PioneerDDJFLX10._playCueBlinkTimer[deck] = engine.beginTimer(500, function() {
-        // Priorité au blink Play (standby). Si non, blink Cue (rarement utilisé ici).
-        if (PioneerDDJFLX10._playShouldBlink[deck]) {
-            PioneerDDJFLX10._playCueBlinkState[deck] = !PioneerDDJFLX10._playCueBlinkState[deck];
-            PioneerDDJFLX10._sendPlayCue(deck, 0x0B, PioneerDDJFLX10._playCueBlinkState[deck]);
-            PioneerDDJFLX10._sendPlayCue(deck, 0x0C, false);
-            return;
-        }
-        if (PioneerDDJFLX10._playCueShouldBlink[deck]) {
-            PioneerDDJFLX10._playCueBlinkState[deck] = !PioneerDDJFLX10._playCueBlinkState[deck];
-            PioneerDDJFLX10._sendPlayCue(deck, 0x0B, false);
-            PioneerDDJFLX10._sendPlayCue(deck, 0x0C, PioneerDDJFLX10._playCueBlinkState[deck]);
-            return;
-        }
-        // Sinon: rien ne clignote
-        PioneerDDJFLX10._playCueBlinkState[deck] = false;
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0B, false);
-        PioneerDDJFLX10._sendPlayCue(deck, 0x0C, false);
-    });
-};
-
-PioneerDDJFLX10._stopPlayCueBlink = function(deck) {
-    if (PioneerDDJFLX10._playCueBlinkTimer[deck]) {
-        engine.stopTimer(PioneerDDJFLX10._playCueBlinkTimer[deck]);
-        PioneerDDJFLX10._playCueBlinkTimer[deck] = null;
-    }
-    PioneerDDJFLX10._playCueBlinkState[deck] = false;
-    PioneerDDJFLX10._playCueShouldBlink[deck] = false;
+    // Play/Cue LEDs are handled by advanced LED connections + XML outputs.
+    // Avoid direct duplicate sends here to prevent conflicting layers.
 };
 
 // === Advanced Pioneer-like LED policy (Hotfix A) ===
@@ -489,10 +547,10 @@ PioneerDDJFLX10._initAdvancedLeds = PioneerDDJFLX10._initAdvancedLeds || functio
 };
 
 // Key Sync handler (protégé par SHIFT)
-PioneerDDJFLX10.syncKeyHandler = function(channel, control, value, status, group) {
+PioneerDDJFLX10.syncKeyHandler = function(_channel, _control, value, _status, group) {
     if (value !== 0x7F) return;
-    if (PioneerDDJFLX10.shiftActive) return; // ignore si SHIFT
-    engine.setValue(group, "key_sync", 1);
+    if (PioneerDDJFLX10._isShiftActive(group)) return; // ignore si SHIFT du deck
+    engine.setValue(group, "sync_key", 1);
 };
 
 // Function to expand playlists folder (currently disabled)
@@ -508,7 +566,7 @@ PioneerDDJFLX10._hotcueLedStatuses = [
     [0x9D, 0x9E]
 ];
 PioneerDDJFLX10._setHotcueLed = function (deck, num, on) {
-    var val = on ? 0x7F : 0x00;
+    var val = on ? 0x1D : 0x00; // yellow when lit, off otherwise
     var idx = deck - 1;
     var statuses = PioneerDDJFLX10._hotcueLedStatuses[idx] || [];
     for (var i = 0; i < statuses.length; i++) {
